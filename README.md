@@ -13,7 +13,15 @@ Borat's favorite Python clone of redis. A data structures server written mainly 
 
 ## Getting Started
 
-First, in one shell, start up the server:
+First, install any necessary Python packages. Using virtualenv is recommended to keep packages clean:
+```bash
+# assuming your pwd is redisnot ...
+virtualenv env
+source env/bin/activate
+(env) pip install -r requirements.txt
+```
+
+Next, in one shell, start up the server:
 ```bash
 # by default listening on port 6379
 ./src/redis-server
