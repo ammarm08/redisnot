@@ -2,7 +2,8 @@ import asyncore
 import socket
 import logging
 
-TRANSMISSION_SIZE = 1024
+# borrowed from redis/src/server.h
+PROTO_IOBUF_LEN = 1024*16
 
 class Client(asyncore.dispatcher):
     """
@@ -21,7 +22,7 @@ class Client(asyncore.dispatcher):
         TODO: peek into redis's writeToClient function
         """
         data = self.buffer.pop()
-        sent = self.send(data[:TRANSMISSION_SIZE])
+        sent = self.send(data[:PROTO_IOBUF_LEN])
         if sent < len(data):
             remaining = data[sent:]
             self.buffer.append(remaining)
@@ -30,13 +31,25 @@ class Client(asyncore.dispatcher):
 
     def handle_read(self):
         """
-        TODO: peek into redis's writeToClient function
+        TODO: peek into redis's readQueryFromClient function
         """
-        data = self.recv(TRANSMISSION_SIZE)
-        self.logger.debug("handle_read() -> (%d) '%s'", len(data), data.rstrip())
 
-        # event loop only knows this is writable if buffer has data
-        # TODO: for now, this is just an echo server
+        # consume readable data from socket conn
+        data = b""
+        while True:
+            chunk = self.recv(PROTO_IOBUF_LEN)
+            data += chunk
+            if len(chunk) < PROTO_IOBUF_LEN:
+                break
+
+        # TODO: parse data into a redis-protocol structure
+
+
+        # TODO: call the resulting redis command
+
+
+        # TODO: send the appropriate response
+        self.logger.debug("handle_read() -> (%d) '%s'", len(data), data.rstrip())
         self.buffer.insert(0, data)
 
     def handle_close(self):
