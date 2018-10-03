@@ -2,17 +2,23 @@ import asyncore
 import socket
 import logging
 
-# borrowed from redis/src/server.h
+from resp import RedisProto
+
+# 16 bytes -- buffered i/o. redis/src/server.h
 PROTO_IOBUF_LEN = 1024*16
 
 class Client(asyncore.dispatcher):
     """
     TODO: peek into redis's Client type definitions
     """
-    def __init__(self, sock, addr):
+    def __init__(self, sock, addr, commands, store):
         asyncore.dispatcher.__init__(self, sock)
         self.logger = logging.getLogger("Client " + str(addr))
+
+        self.commands = commands
+        self.store = store
         self.buffer = []
+        self.parser = RedisProto()
 
     def writable(self):
         return bool(self.buffer)
@@ -42,15 +48,20 @@ class Client(asyncore.dispatcher):
             if len(chunk) < PROTO_IOBUF_LEN:
                 break
 
-        # TODO: parse data into a redis-protocol structure
+        data = data.rstrip()
+        self.logger.debug("handle_read() -> (%d) '%s'", len(data), data)
 
+        parsed = self.parser.decode(data)
+        cmd_name = parsed[0]
 
-        # TODO: call the resulting redis command
-
-
-        # TODO: send the appropriate response
-        self.logger.debug("handle_read() -> (%d) '%s'", len(data), data.rstrip())
-        self.buffer.insert(0, data)
+        try:
+            cmd = self.commands[cmd_name]
+        except:
+            self.logger.debug("handle_read() -> command '%s' not found in %s", cmd_name, repr(self.commands.keys()))
+            self.buffer.insert(0, "INVALID COMMAND\n")
+        else:
+            ret = cmd.func(self.store, *parsed[1:])
+            self.buffer.insert(0, repr(ret) + "\n")
 
     def handle_close(self):
         """
