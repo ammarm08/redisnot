@@ -1,3 +1,9 @@
+"""
+strings.py
+
+Redis String Commands. The first argument is a reference
+to the logical store in use by the caller.
+"""
 
 __all__ = [
     'get_command',

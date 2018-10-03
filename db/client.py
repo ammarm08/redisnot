@@ -1,15 +1,34 @@
+"""
+client.py
+
+The Server class delegates all socket connection handling
+to the ClientHandler class.
+
+This class reads a redis query from a readable socket connection,
+then delegates the parsing and execution of the query to
+resp.py and command.py, respectively.
+
+ClientHandler receives references to the command table and logical store
+from the Server that accepted the client connection.
+
+Many of the class methods override expected methods from asyncore.dispatcher.
+"""
+# TODO: include asyncore.dispatcher docs
+
 import asyncore
 import socket
 import logging
+import resp
 
-from resp import RedisProto
-
-# 16 bytes -- buffered i/o. redis/src/server.h
+# 16 bytes of i/o reads at a time (redis/src/server.h)
 PROTO_IOBUF_LEN = 1024*16
 
-class Client(asyncore.dispatcher):
+class ClientHandler(asyncore.dispatcher):
     """
     TODO: peek into redis's Client type definitions
+
+    Initializes with references to the command table and logical store.
+    Sets a buffer property used to maintain to send in response to client request.
     """
     def __init__(self, sock, addr, commands, store):
         asyncore.dispatcher.__init__(self, sock)
@@ -18,14 +37,18 @@ class Client(asyncore.dispatcher):
         self.commands = commands
         self.store = store
         self.buffer = []
-        self.parser = RedisProto()
+
 
     def writable(self):
         return bool(self.buffer)
 
+
     def handle_write(self):
         """
         TODO: peek into redis's writeToClient function
+
+        Pops response data off the buffer and sends
+        it in PROTO_IOBUF_LEN-sized chunks to the client.
         """
         data = self.buffer.pop()
         sent = self.send(data[:PROTO_IOBUF_LEN])
@@ -38,6 +61,11 @@ class Client(asyncore.dispatcher):
     def handle_read(self):
         """
         TODO: peek into redis's readQueryFromClient function
+
+        Consumes data in PROTO_IOBUF_LEN-sized chunks.
+        Delegates to resp package to deserialize (redis protocol).
+        Delegates command execution to the command table.
+        Builds up reply to client after command executes.
         """
 
         # consume readable data from socket conn
@@ -51,7 +79,7 @@ class Client(asyncore.dispatcher):
         data = data.rstrip()
         self.logger.debug("handle_read() -> (%d) '%s'", len(data), data)
 
-        parsed = self.parser.decode(data)
+        parsed = resp.decode(data)
         cmd_name = parsed[0]
 
         try:
@@ -64,8 +92,5 @@ class Client(asyncore.dispatcher):
             self.buffer.insert(0, repr(ret) + "\n")
 
     def handle_close(self):
-        """
-        TODO: peek into how redis's closes client connections
-        """
         self.logger.debug("handle_close()")
         self.close()

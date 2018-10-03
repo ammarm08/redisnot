@@ -3,7 +3,7 @@ server.py
 
 A TCP server that accepts client connections,
 delegates message parsing and redis command execution,
-then writes response back to client
+then writes response back to socket
 
 Uses python's asyncore lib for nonblocking network I/O
 """
@@ -12,7 +12,7 @@ import asyncore
 import socket
 import logging
 
-from client import Client
+from client import ClientHandler
 from command import Command
 from store import Store
 
@@ -44,20 +44,26 @@ class Server(asyncore.dispatcher):
 
         self.listen(TCP_BACKLOG)
 
+
     def handle_accept(self):
         """
-        Upon successful client connection to socket, delegate
-        processing to Client
+        As Server subclasses from asyncore.dispatcher, it expects
+        a handle_accept method to handle a successful client connection.
+
+        Delegates connection handling to ClientHandler.
         """
         client_stats = self.accept()
         if client_stats is not None:
             sock, addr = client_stats
             self.logger.debug("handle_accept() -> %s", addr)
-            Client(sock, addr, self.commands, self.store)
+            ClientHandler(sock, addr, self.commands, self.store)
+
 
     def command_table(self):
         """
-        Map command names to the functions that execute them
+        Maps command names to the functions that execute them.
+        Server maintains this dictionary and passes reference to it
+        to client handlers.
 
         "r" -> read
         "w" -> write
@@ -82,6 +88,7 @@ class Server(asyncore.dispatcher):
 
         self.logger.debug("command_table() -> registered commands: %s", repr(command_table.keys()))
         return command_table
+
 
 def main():
     """

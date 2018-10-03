@@ -1,3 +1,10 @@
+"""
+store.py
+
+The logical core of the redisnot data store.
+Exposes a simple 'get' and 'set' interface.
+"""
+
 import logging
 
 class Store(object):

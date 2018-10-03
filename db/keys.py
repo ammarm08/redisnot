@@ -1,3 +1,9 @@
+"""
+keys.py
+
+Redis Keys Commands. The first argument is a reference
+to the logical store in use by the caller.
+"""
 
 __all__ = [
     'del_command',
