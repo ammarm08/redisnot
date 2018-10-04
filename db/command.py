@@ -26,3 +26,7 @@ class Command(object):
                 self.read = True
             elif opt == 'w':
                 self.write = True
+
+
+    def execute(self, store, *args):
+        return self.func(store, *args)
