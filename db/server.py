@@ -64,10 +64,6 @@ class Server(asyncore.dispatcher):
         Maps command names to the functions that execute them.
         Server maintains this dictionary and passes reference to it
         to client handlers.
-
-        "r" -> read
-        "w" -> write
-        "+" -> log to aof file
         """
         commands = [
             # String commands (incomplete)
