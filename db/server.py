@@ -1,27 +1,30 @@
 """
 server.py
 
-A TCP server that accepts client connections,
+A TCP server that accepts client connections in a nonblocking manner,
 delegates message parsing and redis command execution,
 then writes response back to socket
 
-Uses python's asyncore lib for nonblocking network I/O
+Uses python's asynchat lib for nonblocking network I/O
 """
 
 import asyncore
 import socket
 import logging
 
+import strings
+import keys
+
 from client import ClientHandler
 from command import Command
 from store import Store
 
-import strings
-import keys
 
 HOST = "0.0.0.0"
 PORT = 6379
 TCP_BACKLOG = 10
+CLIENTS = {}
+
 
 class Server(asyncore.dispatcher):
 
@@ -29,7 +32,7 @@ class Server(asyncore.dispatcher):
         """
         Initialize server config and redisnot commands
         """
-        asyncore.dispatcher.__init__(self)
+        asyncore.dispatcher.__init__(self, map=CLIENTS)
         self.logger = logging.getLogger("Server")
 
         self.commands = self.command_table()
@@ -52,11 +55,11 @@ class Server(asyncore.dispatcher):
 
         Delegates connection handling to ClientHandler.
         """
-        client_stats = self.accept()
-        if client_stats is not None:
-            sock, addr = client_stats
+        pair = self.accept()
+        if pair is not None:
+            sock, addr = pair
             self.logger.debug("handle_accept() -> %s", addr)
-            ClientHandler(sock, addr, self.commands, self.store)
+            ClientHandler(sock=sock, addr=addr, map=CLIENTS, commands=self.commands, store=self.store)
 
 
     def command_table(self):
@@ -92,7 +95,7 @@ def main():
     """
     logging.basicConfig(level=logging.DEBUG, format="%(name)s:[%(levelname)s]: %(message)s")
     s = Server((HOST, PORT))
-    asyncore.loop()
+    asyncore.loop(map=CLIENTS)
 
 if __name__ == "__main__":
     main()
