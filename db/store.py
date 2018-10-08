@@ -17,6 +17,5 @@ class Store(object):
         return self.dict[key]
 
     def set(self, key, value):
-        # TODO: typecheck before setting!
         self.logger.debug("set() -> setting key:value '%s:%s'", key, value)
         self.dict[key] = value

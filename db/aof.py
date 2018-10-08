@@ -20,12 +20,12 @@ class AOF(asyncore.file_dispatcher):
         self.buffer = b""
 
         try:
-            fd = open(file, "ab+")
+            self.fd = open(file, "ab+")
         except Exception as e:
             self.logger.debug("__init__() -> error reading file %s", file)
             raise e
         else:
-            asyncore.file_dispatcher.__init__(self, fd, map=map)
+            asyncore.file_dispatcher.__init__(self, self.fd, map=map)
 
 
     def writable(self):
@@ -42,3 +42,12 @@ class AOF(asyncore.file_dispatcher):
         self.logger.debug("append() -> redis command %s", repr(redis_command))
         serialized = resp.encode(redis_command)
         self.buffer = serialized
+
+
+    def read_aof_line(self):
+        # seek to beginning. note that since this is in append mode,
+        # at next write, will move automatically to end of file
+        self.fd.seek(0)
+
+        # return line-reading iterator
+        return enumerate(self.fd)

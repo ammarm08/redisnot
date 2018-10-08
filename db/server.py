@@ -16,6 +16,7 @@ import logging
 import strings
 import keys
 
+import resp
 from client import ClientHandler
 from command import Command
 from store import Store
@@ -48,6 +49,8 @@ class Server(asyncore.dispatcher):
         # it logs write-commands to file as a way to somewhat persist data.
         self.aof = AOF(file=AOF_FILE, map=CLIENTS)
 
+        # reconstruct data from current AOF file
+        self.load_aof()
 
         # networking. bind and listen to specified address
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -108,6 +111,30 @@ class Server(asyncore.dispatcher):
 
         self.logger.debug("command_table() -> registered commands: %s", repr(command_table.keys()))
         return command_table
+
+
+    def load_aof(self):
+        """
+        Replays the AOF from beginning to end. The AOF only
+        consists of write commands, so presumably if no commands
+        got lost, the AOF should fully reconstruct the data store.
+        """
+        for line_no, line in self.aof.read_aof_line():
+            self.logger.debug("load_aof() -> reading line # %d: %s", line_no, line)
+
+            # parse serialized command
+            redis_command = resp.decode(line)
+
+            # lookup command
+            cmd_name = redis_command[0]
+            try:
+                cmd = self.commands[cmd_name]
+            except KeyError as e:
+                pass
+
+            # execute command to in-memory store
+            cmd_args = redis_command[1:]
+            ret = cmd.execute(self.store, *cmd_args)
 
 
 def main():
