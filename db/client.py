@@ -56,22 +56,30 @@ class ClientHandler(asynchat.async_chat):
 
         redis_command = resp.decode(data)
         reply = self.process_command(redis_command)
-        
+
         self.push(reply)
 
 
     def process_command(self, redis_command):
         cmd_name = redis_command[0]
+        cmd = self.lookup_command(cmd_name)
 
-        try:
-            cmd = self.commands[cmd_name]
-        except:
+        if cmd is None:
             self.logger.debug("process_command() -> command '%s' invalid in %s", cmd_name, repr(self.commands.keys()))
             return "INVALID COMMAND\n"
         else:
             ret = cmd.execute(self.store, *redis_command[1:])
             reply = repr(ret) + "\n"
             return reply
+
+
+    def lookup_command(self, cmd_name):
+        try:
+            cmd = self.commands[cmd_name]
+        except KeyError:
+            return None
+        else:
+            return cmd
 
 
     def handle_close(self):
