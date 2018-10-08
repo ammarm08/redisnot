@@ -20,11 +20,11 @@ class Command(object):
         self.func = func
 
         for opt in opts:
-            if opt == '+':
+            if opt == "+":
                 self.aof = True
-            elif opt == 'r':
+            elif opt == "r":
                 self.read = True
-            elif opt == 'w':
+            elif opt == "w":
                 self.write = True
 
 

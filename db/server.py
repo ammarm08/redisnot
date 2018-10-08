@@ -10,6 +10,7 @@ Uses python's asynchat lib for nonblocking network I/O
 
 import asyncore
 import socket
+import os
 import logging
 
 import strings
@@ -18,12 +19,14 @@ import keys
 from client import ClientHandler
 from command import Command
 from store import Store
+from aof import AOF
 
 
 HOST = "0.0.0.0"
 PORT = 6379
 TCP_BACKLOG = 10
 CLIENTS = {}
+AOF_FILE = os.getcwd() + "/db.aof"
 
 
 class Server(asyncore.dispatcher):
@@ -35,15 +38,23 @@ class Server(asyncore.dispatcher):
         asyncore.dispatcher.__init__(self, map=CLIENTS)
         self.logger = logging.getLogger("Server")
 
+        # these are the commands supported by the redisnot server
         self.commands = self.command_table()
+
+        # in-memory database with a simple get/set interface
         self.store = Store()
 
-        # networking
+        # the append-only filestream plugs into the main event loop.
+        # it logs write-commands to file as a way to somewhat persist data.
+        self.aof = AOF(file=AOF_FILE, map=CLIENTS)
+
+
+        # networking. bind and listen to specified address
         self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
         self.set_reuse_addr()
         self.bind(address)
         self.address = self.socket.getsockname()
-        self.logger.debug("binding to %s", self.address)
+        self.logger.debug("__init__() -> binding to %s", self.address)
 
         self.listen(TCP_BACKLOG)
 
@@ -59,7 +70,17 @@ class Server(asyncore.dispatcher):
         if pair is not None:
             sock, addr = pair
             self.logger.debug("handle_accept() -> %s", addr)
-            ClientHandler(sock=sock, addr=addr, map=CLIENTS, commands=self.commands, store=self.store)
+
+            # passes along references to socket, event loop map,
+            # commands, store, and aof
+            ClientHandler(
+                sock=sock,
+                addr=addr,
+                map=CLIENTS,
+                commands=self.commands,
+                store=self.store,
+                aof=self.aof
+            )
 
 
     def command_table(self):

@@ -2,12 +2,13 @@
 resp.py
 
 Implements serialization/deserialization
-of a redis protocol (RESP) bytestream.
+of a redis protocol (RESP) string.
 """
 
 
 __all__ = [
-    'decode'
+    'decode',
+    'encode'
 ]
 
 DELIMITER = " "
@@ -15,7 +16,7 @@ NULL = "NULL"
 
 def decode(data):
     """
-    Given a redis protocol-adhering bytestream,
+    Given a redis protocol string,
     parse it into a list of command tokens
     """
     # TODO: implement redis protocol
@@ -25,3 +26,13 @@ def decode(data):
         return parsed
     else:
         return NULL
+
+
+def encode(data):
+    """
+    Given a parsed redis command, serialize it back into
+    redis-protocol string
+    """
+    # TODO: implement redis protocol
+    serialized = DELIMITER.join(data)
+    return serialized
