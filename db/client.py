@@ -8,10 +8,14 @@ This class reads a redis query from a readable socket connection,
 then delegates the parsing and execution of the query to
 resp.py and command.py, respectively.
 
-ClientHandler receives references to the command table and logical store
+ClientHandler receives references to the command table, store, and AOF
 from the Server that accepted the client connection.
 
-Many of the class methods override expected methods from asynchat
+Many of the class methods override expected methods from asynchat:
+
+"ac_*_buffer_size" methods dictate the buffer_size for reading and writing.
+"collect_incoming_data" dictates what to do when a new chunk of data comes in.
+"*_terminator" methods dictate how to delimit incoming data into separate messages.
 """
 
 import asynchat
@@ -47,11 +51,21 @@ class ClientHandler(asynchat.async_chat):
 
 
     def collect_incoming_data(self, data):
+        """
+        Buffer up incoming data
+        """
         self.logger.debug("collect_incoming_data() -> entering read of %s", data)
         self.query_buffer.append(data)
 
 
     def found_terminator(self):
+        """
+        Clear the buffer, decode and process the request.
+        Send reply back to client.
+        """
+
+        # the contents of the query buffer denote one complete message.
+        # let's handle it and reset the buffer.
         data = "".join(self.query_buffer).rstrip()
         self.query_buffer = []
         self.logger.debug("found_terminator() -> (%d) '%s'", len(data), data)
@@ -60,11 +74,16 @@ class ClientHandler(asynchat.async_chat):
         redis_command = resp.decode(data)
         reply = self.process_command(redis_command)
 
-        # push the resulting reply onto the writestream
+        # push the resulting reply onto the write-stream
         self.push(reply)
 
 
     def process_command(self, redis_command):
+        """
+        Execute the command, writing the return value
+        to the in-memory dict and the command to aof if necessary
+        """
+        
         # make sure the command exists
         cmd_name = redis_command[0]
         cmd = self.lookup_command(cmd_name)
@@ -72,10 +91,13 @@ class ClientHandler(asynchat.async_chat):
             self.logger.debug("process_command() -> command '%s' invalid in %s", cmd_name, repr(self.commands.keys()))
             return "INVALID COMMAND\n"
 
-        # if command exists, execute it and then append it to the aof log
+        # if command exists, execute it
         cmd_args = redis_command[1:]
         ret = cmd.execute(self.store, *cmd_args)
-        self.aof.append(redis_command)
+
+        # only write-commands get appended
+        if cmd.aof == True:
+            self.aof.append(redis_command)
 
         # finally, construct reply to client
         reply = repr(ret) + "\n"

@@ -3,9 +3,16 @@ server.py
 
 A TCP server that accepts client connections in a nonblocking manner,
 delegates message parsing and redis command execution,
-then writes response back to socket
+then writes response back to socket.
 
-Uses python's asynchat lib for nonblocking network I/O
+Uses python's asynchat lib for nonblocking network I/O.
+
+antirez's redis implements something similar to this from scratch in C.
+I decided to use Python's built-in event-looping, nonblocking library. Yay.
+
+Both take advantage of passing around references to a map that contains state
+about existing client connections or file events. The event loop uses this map
+to enqueue and process both network and file I/O at the beginning of each loop.
 """
 
 import asyncore
@@ -34,7 +41,9 @@ class Server(asyncore.dispatcher):
 
     def __init__(self, address):
         """
-        Initialize server config and redisnot commands
+        Initialize server config, redisnot commands, and networking.
+        If there is an AOF file, will replay the log and load
+        the commands into the in-memory data store.
         """
         asyncore.dispatcher.__init__(self, map=CLIENTS)
         self.logger = logging.getLogger("Server")
@@ -65,7 +74,7 @@ class Server(asyncore.dispatcher):
     def handle_accept(self):
         """
         As Server subclasses from asyncore.dispatcher, it expects
-        a handle_accept method to handle a successful client connection.
+        a "handle_accept" method to handle a successful client connection.
 
         Delegates connection handling to ClientHandler.
         """
@@ -123,7 +132,7 @@ class Server(asyncore.dispatcher):
             self.logger.debug("load_aof() -> reading line # %d: %s", line_no, line)
 
             # parse serialized command
-            redis_command = resp.decode(line)
+            redis_command = resp.decode(line.rstrip())
 
             # lookup command
             cmd_name = redis_command[0]
