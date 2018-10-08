@@ -26,6 +26,7 @@ class AOF(asyncore.file_dispatcher):
         there is data to write to disk.
         """
         self.logger = logging.getLogger("AOF")
+        self.filename = file
         self.buffer = b""
 
         try:

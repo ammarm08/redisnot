@@ -18,6 +18,7 @@ to enqueue and process both network and file I/O at the beginning of each loop.
 import asyncore
 import socket
 import os
+import argparse
 import logging
 
 import strings
@@ -30,20 +31,26 @@ from store import Store
 from aof import AOF
 
 
-HOST = "0.0.0.0"
-PORT = 6379
-TCP_BACKLOG = 10
+
+# default server settings
+DEFAULT_HOST = "0.0.0.0"
+DEFAULT_PORT = 6379
+DEFAULT_TCP_BACKLOG = 10
+DEFAULT_AOF = os.getcwd() + "/db.aof"
+
+
+
+# global map for event loop to track channels and events
 CLIENTS = {}
-AOF_FILE = os.getcwd() + "/db.aof"
+
 
 
 class Server(asyncore.dispatcher):
 
-    def __init__(self, address):
+    def __init__(self):
         """
-        Initialize server config, redisnot commands, and networking.
-        If there is an AOF file, will replay the log and load
-        the commands into the in-memory data store.
+        Initialize basic server.
+        See init_server_config and init_server for more.
         """
         asyncore.dispatcher.__init__(self, map=CLIENTS)
         self.logger = logging.getLogger("Server")
@@ -53,22 +60,6 @@ class Server(asyncore.dispatcher):
 
         # in-memory database with a simple get/set interface
         self.store = Store()
-
-        # the append-only filestream plugs into the main event loop.
-        # it logs write-commands to file as a way to somewhat persist data.
-        self.aof = AOF(file=AOF_FILE, map=CLIENTS)
-
-        # reconstruct data from current AOF file
-        self.load_aof()
-
-        # networking. bind and listen to specified address
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.set_reuse_addr()
-        self.bind(address)
-        self.address = self.socket.getsockname()
-        self.logger.debug("__init__() -> binding to %s", self.address)
-
-        self.listen(TCP_BACKLOG)
 
 
     def handle_accept(self):
@@ -146,12 +137,68 @@ class Server(asyncore.dispatcher):
             ret = cmd.execute(self.store, *cmd_args)
 
 
+    def init_server_config(self, parser):
+        """
+        Given an "argparse" object with parsed command line opts,
+        update default opts for the server
+        """
+        self.logger.debug("init_server_config() -> applying server settings")
+
+        self.host = parser.host
+        self.port = parser.port
+        self.backlog = parser.backlog
+
+        # the append-only filestream plugs into the main event loop.
+        # it logs write-commands to file as a way to somewhat persist data.
+        self.aof = AOF(file=parser.aof, map=CLIENTS)
+
+
+
+    def init_server(self):
+        # reconstruct data from current AOF file
+        self.logger.debug("init_server() -> loading aof from %s", self.aof.filename)
+        self.load_aof()
+
+        # networking. bind and listen to specified address
+        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.set_reuse_addr()
+        self.bind((self.host, self.port))
+
+        self.address = self.socket.getsockname()
+        self.logger.debug("init_server() -> binding to %s", self.address)
+
+
+
+
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--host", help="set host for redis server to bind to", default=DEFAULT_HOST)
+    parser.add_argument("--port", help="set port for redis server to listen on", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--aof", help="set aof file to replay from and append to", default=DEFAULT_AOF)
+    parser.add_argument("--backlog", help="set max queue of incoming connections", default=DEFAULT_TCP_BACKLOG)
+
+    return parser.parse_args()
+
+
+
+
+
 def main():
     """
-    Starts server and kicks off main non-blocking I/O event loop
+    Parses command-line opts, initializes serve settings,
+    starts server, and kicks off main non-blocking I/O event loop
     """
     logging.basicConfig(level=logging.DEBUG, format="%(name)s:[%(levelname)s]: %(message)s")
-    s = Server((HOST, PORT))
+    s = Server()
+
+    cl_args = parse_args()
+    s.init_server_config(cl_args)
+    s.init_server()
+
+    s.listen(s.backlog)
     asyncore.loop(map=CLIENTS)
 
 if __name__ == "__main__":
